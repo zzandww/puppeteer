@@ -14,23 +14,29 @@
  * limitations under the License.
  */
 
-buildNode6IfNecessary();
+// puppeteer-core should not install anything.
+if (require('./package.json').name === 'puppeteer-core')
+  return;
 
 if (process.env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD) {
-  console.log('**INFO** Skipping Chromium download. "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD" environment variable was found.');
+  logPolitely('**INFO** Skipping Chromium download. "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD" environment variable was found.');
   return;
 }
 if (process.env.NPM_CONFIG_PUPPETEER_SKIP_CHROMIUM_DOWNLOAD || process.env.npm_config_puppeteer_skip_chromium_download) {
-  console.log('**INFO** Skipping Chromium download. "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD" was set in npm config.');
+  logPolitely('**INFO** Skipping Chromium download. "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD" was set in npm config.');
+  return;
+}
+if (process.env.NPM_PACKAGE_CONFIG_PUPPETEER_SKIP_CHROMIUM_DOWNLOAD || process.env.npm_package_config_puppeteer_skip_chromium_download) {
+  logPolitely('**INFO** Skipping Chromium download. "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD" was set in project config.');
   return;
 }
 
-const downloadHost = process.env.PUPPETEER_DOWNLOAD_HOST || process.env.npm_config_puppeteer_download_host;
+const downloadHost = process.env.PUPPETEER_DOWNLOAD_HOST || process.env.npm_config_puppeteer_download_host || process.env.npm_package_config_puppeteer_download_host;
 
 const puppeteer = require('./index');
 const browserFetcher = puppeteer.createBrowserFetcher({ host: downloadHost });
 
-const revision = process.env.PUPPETEER_CHROMIUM_REVISION || process.env.npm_config_puppeteer_chromium_revision
+const revision = process.env.PUPPETEER_CHROMIUM_REVISION || process.env.npm_config_puppeteer_chromium_revision || process.env.npm_package_config_puppeteer_chromium_revision
   || require('./package.json').puppeteer.chromium_revision;
 
 const revisionInfo = browserFetcher.revisionInfo(revision);
@@ -63,7 +69,7 @@ browserFetcher.download(revisionInfo.revision, onProgress)
  * @return {!Promise}
  */
 function onSuccess(localRevisions) {
-  console.log('Chromium downloaded to ' + revisionInfo.folderPath);
+  logPolitely('Chromium downloaded to ' + revisionInfo.folderPath);
   localRevisions = localRevisions.filter(revision => revision !== revisionInfo.revision);
   // Remove previous chromium revisions.
   const cleanupOldVersions = localRevisions.map(revision => browserFetcher.remove(revision));
@@ -101,34 +107,7 @@ function toMegabytes(bytes) {
   return `${Math.round(mb * 10) / 10} Mb`;
 }
 
-function buildNode6IfNecessary() {
-  const fs = require('fs');
-  const path = require('path');
-
-  // if this package is installed from NPM, then it already has up-to-date node6
-  // folder.
-  if (!fs.existsSync(path.join('utils', 'node6-transform')))
-    return;
-  // if async/await is supported, then node6 is not needed.
-  if (supportsAsyncAwait())
-    return;
-  // Re-build node6/ folder.
-  console.log('Building Puppeteer for Node 6');
-  require(path.join(__dirname, 'utils', 'node6-transform'));
-}
-
-function supportsAsyncAwait() {
-  try {
-    new Function('async function test(){await 1}');
-  } catch (error) {
-    return false;
-  }
-  return true;
-}
-
 function generateProtocolTypesIfNecessary(updated) {
-  if (!supportsAsyncAwait())
-    return;
   const fs = require('fs');
   const path = require('path');
   if (!fs.existsSync(path.join(__dirname, 'utils', 'protocol-types-generator')))
@@ -137,3 +116,12 @@ function generateProtocolTypesIfNecessary(updated) {
     return;
   return require('./utils/protocol-types-generator');
 }
+
+function logPolitely(toBeLogged) {
+  const logLevel = process.env.npm_config_loglevel;
+  const logLevelDisplay = ['silent', 'error', 'warn'].indexOf(logLevel) > -1;
+
+  if (!logLevelDisplay)
+    console.log(toBeLogged);
+}
+

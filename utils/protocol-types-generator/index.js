@@ -3,8 +3,7 @@ const path = require('path');
 const puppeteer = require('../..');
 module.exports = puppeteer.launch({
   pipe: false,
-  executablePath: process.env.CHROME,
-  args: ['--no-sandbox', '--disable-dev-shm-usage']
+  executablePath: process.env.BINARY,
 }).then(async browser => {
   const origin = browser.wsEndpoint().match(/ws:\/\/([0-9A-Za-z:\.]*)\//)[1];
   const page = await browser.newPage();
@@ -13,6 +12,7 @@ module.exports = puppeteer.launch({
   const version = await browser.version();
   await browser.close();
   const output = `// This is generated from /utils/protocol-types-generator/index.js
+  type binary = string;
 declare global {
   module Protocol {${json.domains.map(domain => `${domain.description ? `
     /**
@@ -69,8 +69,8 @@ declare global {
     }
   }
 }
-// empty export to keep file a module
-export {}
+
+export default Protocol;
 `;
   const outputPath = path.join(__dirname, '..', '..', 'lib', 'protocol.d.ts');
   require('fs').writeFileSync(outputPath, output);
